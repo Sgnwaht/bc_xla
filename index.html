@@ -85,6 +85,19 @@ button{cursor:pointer}
 .dzTop .dzt{flex:1;min-width:0}.dzTop .dzt span{overflow-wrap:anywhere}
 .dzTop.on{border-style:solid}
 .mnote{min-width:220px;max-width:320px}.mnote .nt{white-space:normal;font-weight:500}
+.dtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dtools .dr{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.dtools input[type=date]{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+#dayCard .ldk{grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:12px}
+#dayCard .ldi.hl{border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
+#dayCard .ldi .v .lnk{font-size:inherit;font-weight:inherit}
+.dchart{position:relative;height:230px}
+.dgrid{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:14px}
+.dgrid h4{margin:0 0 6px;font-size:13px}
+.dgrid .tw{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.dgrid td.l,.dgrid th.l{text-align:left}
+.dgrid tr.dsel td{background:var(--pri-bg)!important}
+@media(max-width:900px){#dayCard .ldk{grid-template-columns:repeat(2,minmax(0,1fr))}.dgrid{grid-template-columns:1fr}}
 .dzbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .dzx{position:relative}
 .btn.bdel{color:#dc2626;border-color:rgba(220,38,38,.45);background:var(--card)}.btn.bdel:hover{background:rgba(220,38,38,.08)}
@@ -432,6 +445,12 @@ tbody tr:hover td{background:color-mix(in srgb,var(--pri) 13%,var(--card))}
   <div id="vDash">
   <section class="kpis" id="kpis"></section>
 
+  <section class="card" id="dayCard" style="margin-bottom:16px">
+    <div class="card-h"><div><h2><span class="ci"><svg class="ic"><use href="#i-cal"/></svg></span>Sản lượng theo ngày</h2><p id="daySub"></p></div>
+      <div class="dtools noprint" id="dayTools"></div></div>
+    <div class="card-b" id="dayBody"></div>
+  </section>
+
   <div class="grid">
     <section class="card">
       <div class="card-h"><div><h2><span class="ci"><svg class="ic"><use href="#i-trend"/></svg></span>Tiến độ luỹ kế so với kế hoạch</h2><p id="mainSub">% tập điểm đã hoàn tất theo ngày</p></div></div>
@@ -651,7 +670,7 @@ const ic=n=>{const N='http://www.w3.org/2000/svg',s=document.createElementNS(N,'
 function render(){
   if(S.f.period==='cur'){const P0=plan();S.f.period=P0.mi>=0&&P0.mi<P0.months?String(P0.mi):'all';}
   applyOv();buildTD();allocPlan(false);M=compute();
-  renderHead();renderFilters();renderKpis();renderMain();renderDonut();renderCmp();renderIns();renderTable();renderSrc();extraRender();
+  renderHead();renderFilters();renderKpis();renderDay();renderMain();renderDonut();renderCmp();renderIns();renderTable();renderSrc();extraRender();
 }
 function scopeLabel(){const f=S.f,a=[];if(f.leader!=='all')a.push('Đội '+f.leader);if(f.ktv!=='all')a.push(short(f.ktv));if(f.block!=='all')a.push(f.block);return a.length?a.join(' · '):'Toàn đơn vị';}
 function renderHead(){const P=M.P,x=S.meta.xla||{};
@@ -939,7 +958,8 @@ function lkL(o,k,bold,lead){const v=o[cntKey(k)];if(!v)return el('span',{class:'
   b.onclick=e=>{e.stopPropagation();openMd(Object.assign({},o,{lead:lead||o.leader,ktv:null}),k);};return b;}
 function lk(r,k,bold){const v=r[k];if(!v)return el('span',{class:'muted'},'0');const b=el('button',{class:'lnk',type:'button',title:'Bấm để xem danh sách tập điểm'},bold?B(nf(v)):nf(v));b.onclick=e=>{e.stopPropagation();openMd(r,k);};return b;}
 function mdRows(){const f=KIND[MD.k][1],q=norm($('#mQ').value),s=$('#mF').value;
-  const base=MD.r.lead?tdRows(S.td).filter(x=>MD.r.lead==='*'||x.leader===MD.r.lead):tdRows().filter(x=>x.ktv===MD.r.ktv);
+  const base=MD.r.day?tdRows().filter(x=>(!MD.r.ktvF||x.ktv===MD.r.ktvF)&&(MD.r.mode==='done'?(x.st==='done'&&x.dn>=MD.r.day.a&&x.dn<MD.r.day.b):MD.r.set.has(x.c)))
+    :MD.r.lead?tdRows(S.td).filter(x=>MD.r.lead==='*'||x.leader===MD.r.lead):tdRows().filter(x=>x.ktv===MD.r.ktv);
   return base.filter(x=>f(x)).filter(x=>s==='all'||(s==='over'?x.over:x.st===s)).filter(x=>!q||norm(x.c+' '+x.block+' '+x.id).includes(q))
     .sort((a,b)=>MD.k==='done'?(b.dn||0)-(a.dn||0):(b.rank-a.rank)||String(a.c).localeCompare(b.c));}
 function drawMd(){const rows=mdRows(),t=$('#mTbl');t.textContent='';
@@ -951,7 +971,7 @@ function drawMd(){const rows=mdRows(),t=$('#mTbl');t.textContent='';
     el('td',null,badge(stKey(r))),(()=>{const n=noteOf(r.c);return el('td',{class:'mnote',title:n[0]},el('span',{class:'nt '+n[1]},n[0]));})(),el('td',null,r.id?kdLab(r.kd)+r.id:el('span',{class:'muted'},'—')),el('td',null,d(r.cr)),el('td',null,d(r.due)),el('td',null,d(r.dn)),
     el('td',null,r.ai?el('span',{class:'bdg '+({pass:'ok',fail:'bad',other:'gray'})[aiSt(r.ai)]},r.ai):el('span',{class:'muted'},r.st==='no'?'—':'Chờ AI')),
     el('td',null,r.ctl&&r.ctl!=='null'?r.ctl:el('span',{class:'muted'},'—')))));
-  $('#mS').textContent='Hiển thị '+nf(rows.length)+' tập điểm · '+(MD.r.lead?(MD.r.lead==='*'?'toàn đơn vị, toàn dự án':'đội '+MD.r.lead+', toàn dự án'):scopeLabel());}
+  $('#mS').textContent='Hiển thị '+nf(rows.length)+' tập điểm · '+(MD.r.day?scopeLabel()+' · '+dayLabel(MD.r.day.a,MD.r.day.b):MD.r.lead?(MD.r.lead==='*'?'toàn đơn vị, toàn dự án':'đội '+MD.r.lead+', toàn dự án'):scopeLabel());}
 function openMd(r,k){MD.r=r;MD.k=k;$('#mQ').value='';
   const f=$('#mF');f.textContent='';[['all','Mọi trạng thái'],['done','Hoàn tất'],['doing','Đang bảo trì'],['todo','Cần bảo trì'],['survey','Chờ khảo sát'],['over','Quá hạn'],['no','Chưa tạo phiếu']].forEach(([v,l])=>f.append(el('option',{value:v},l)));
   const who=r.lead?(r.lead==='*'?'Toàn đơn vị':'Đội '+r.lead):r.ktv;
@@ -964,6 +984,88 @@ const closeMd=()=>$('#md').hidden=true;
 $('#mX').onclick=closeMd;$('#md').addEventListener('click',e=>{if(e.target.id==='md')closeMd();});
 $('#mQ').oninput=drawMd;$('#mF').onchange=drawMd;
 addEventListener('keydown',e=>{if(e.key==='Escape')closeMd();});
+
+/* ---------- SẢN LƯỢNG THEO NGÀY ---------- */
+const DAYQ=[['today','Hôm nay'],['yday','Hôm qua'],['7d','7 ngày'],['30d','30 ngày'],['month','Tháng này'],['all','Toàn dự án']];
+S.day=Object.assign({q:'7d',a:'',b:''},ls.get('day',{}));
+const ymd=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());};
+const fromYmd=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');return m?+new Date(+m[1],+m[2]-1,+m[3]):null;};
+const dkey=ms=>+sod(new Date(ms));
+function dayRange(){const t=+sod(new Date()),q=S.day.q,P=M.P;
+  if(q==='today')return[t,t+DAY];if(q==='yday')return[t-DAY,t];if(q==='7d')return[t-6*DAY,t+DAY];if(q==='30d')return[t-29*DAY,t+DAY];
+  if(q==='month'){const d=new Date();return[+new Date(d.getFullYear(),d.getMonth(),1),t+DAY];}
+  if(q==='all')return[+P.start,Math.min(+P.end,t+DAY)];
+  let a=fromYmd(S.day.a),b=fromYmd(S.day.b);if(a==null)a=t;if(b==null)b=a;if(b<a)[a,b]=[b,a];return[a,b+DAY];}
+const saveDay=()=>ls.set('day',S.day);
+function setDay(q,a,b){S.day.q=q;if(a!=null)S.day.a=a;if(b!=null)S.day.b=b;saveDay();renderDay();}
+function dayLabel(a,b){return b-a<=DAY?'ngày '+dmy(new Date(a)):dmy(new Date(a))+' – '+dmy(new Date(b-DAY));}
+function dayData(){const[a,b]=dayRange(),days=new Map(),K=new Map(),codes=new Set(M.tds.map(t=>t.c)),ktvOf=new Map(M.tds.map(t=>[t.c,t.ktv]));
+  for(let d=a;d<b;d=+sod(new Date(d+DAY*1.5)))days.set(d,{d,done:0,pass:0,fixed:0,btfail:0,ks:0,bt:0,crSet:new Set()});
+  const kg=k=>{let o=K.get(k);if(!o){o={ktv:k,leader:leaderOf(k),done:0,tk:0,crSet:new Set()};K.set(k,o);}return o;};
+  const tot={done:0,pass:0,fixed:0,btfail:0,ks:0,bt:0,crSet:new Set()};
+  M.tds.forEach(t=>{const o=TD[t.c];if(!o||o.st!=='done'||o.dn==null||o.dn<a||o.dn>=b)return;const g=days.get(dkey(o.dn));if(!g)return;
+    g.done++;tot.done++;kg(t.ktv).done++;if(o.res==='pass'){g.pass++;tot.pass++;}else if(o.res==='btfail'){g.btfail++;tot.btfail++;}else{g.fixed++;tot.fixed++;}});
+  S.tickets.forEach(t=>{if(!codes.has(t.td)||t.cr==null||t.cr<a||t.cr>=b)return;const g=days.get(dkey(t.cr));if(!g)return;
+    const kd=kindOf(t);g[kd]++;tot[kd]++;g.crSet.add(t.td);tot.crSet.add(t.td);const k=kg(ktvOf.get(t.td));k.tk++;k.crSet.add(t.td);});
+  return{a,b,days:[...days.values()],K:[...K.values()].sort((x,y)=>y.done-x.done||y.tk-x.tk||String(x.ktv).localeCompare(y.ktv)),tot};}
+/* mở danh sách tập điểm theo ngày */
+function openDayMd(o){MD.r=o;MD.k=o.mode==='done'?'done':'total';$('#mQ').value='';
+  const f=$('#mF');f.textContent='';[['all','Mọi trạng thái'],['done','Hoàn tất'],['doing','Đang bảo trì'],['todo','Cần bảo trì'],['survey','Chờ khảo sát'],['over','Quá hạn']].forEach(([v,l])=>f.append(el('option',{value:v},l)));
+  $('#mT').textContent='';$('#mT').append(ic('cal'),o.title);
+  const c=$('#mC');c.textContent='';(o.chips||[]).forEach(x=>c.append(el('span',null,x)));
+  drawMd();$('#md').hidden=false;$('#mQ').focus();}
+function dLink(v,o,bold){if(!v)return el('span',{class:'muted'},'0');const b=el('button',{class:'lnk',type:'button',title:'Bấm để xem danh sách tập điểm'},bold?B(nf(v)):nf(v));b.onclick=e=>{e.stopPropagation();openDayMd(o);};return b;}
+function renderDay(){const tools=$('#dayTools'),body=$('#dayBody');if(!tools||!body)return;
+  const R=dayData(),{a,b,tot}=R,lab=dayLabel(a,b),nd=Math.max(1,Math.round((b-a)/DAY));
+  /* công cụ chọn ngày */
+  tools.textContent='';const seg=el('div',{class:'seg'});
+  DAYQ.forEach(([v,l])=>{const x=el('button',{type:'button',class:S.day.q===v?'on':''},l);x.onclick=()=>setDay(v);seg.append(x);});
+  const ia=el('input',{type:'date','aria-label':'Từ ngày',value:ymd(a)}),ib=el('input',{type:'date','aria-label':'Đến ngày',value:ymd(b-DAY)});
+  ia.onchange=()=>setDay('custom',ia.value,ib.value<ia.value?ia.value:ib.value);ib.onchange=()=>setDay('custom',ia.value>ib.value?ib.value:ia.value,ib.value);
+  tools.append(seg,el('span',{class:'dr'},'Từ',ia,'đến',ib));
+  $('#daySub').textContent='Số tập điểm hoàn tất và số phiếu tạo mới theo ngày · '+lab+' · '+scopeLabel();
+  /* ô tổng */
+  body.textContent='';
+  const sc=scopeLabel(),mk=(mode,extra)=>Object.assign({mode,day:{a,b},chips:[sc,lab]},extra);
+  const crList=[...tot.crSet];
+  const tile=(l,v,s,cls)=>el('div',{class:'ldi'+(cls?' '+cls:'')},el('div',{class:'l'},l),el('div',{class:'v'},v),el('div',{class:'s'},s));
+  body.append(el('div',{class:'ldk'},
+    tile('Tập điểm hoàn tất',dLink(tot.done,mk('done',{title:'Hoàn tất '+lab+' ('+nf(tot.done)+' tập điểm)'}),true),'trung bình '+nf(tot.done/nd,1)+'/ngày','hl'),
+    tile('Khảo sát đạt',nf(tot.pass),'hoàn tất không cần bảo trì'),
+    tile('Bảo trì Đạt / Không đạt',nf(tot.fixed)+' / '+nf(tot.btfail),'đã bảo trì hoàn tất'),
+    tile('Phiếu tạo mới',dLink(tot.ks+tot.bt,mk('cr',{set:tot.crSet,title:'Tập điểm có phiếu tạo '+lab+' ('+nf(crList.length)+' tập điểm)'})),nf(tot.ks)+' khảo sát · '+nf(tot.bt)+' bảo trì'),
+    tile('Ngày cao nhất',(()=>{const m=R.days.reduce((x,y)=>y.done>(x?x.done:-1)?y:x,null);return m&&m.done?nf(m.done):'0';})(),(()=>{const m=R.days.reduce((x,y)=>y.done>(x?x.done:-1)?y:x,null);return m&&m.done?'hoàn tất ngày '+dmy(new Date(m.d)):'chưa có ngày nào hoàn tất';})())));
+  /* biểu đồ */
+  const cb=el('div',{class:'dchart'});body.append(cb);
+  if(typeof Chart==='undefined')cb.append(el('div',{class:'state'},el('b',null,'Không vẽ được biểu đồ'),'Không tải được thư viện biểu đồ – kiểm tra kết nối mạng.'));
+  else{cb.append(el('canvas',{id:'cDay','aria-label':'Biểu đồ sản lượng theo ngày'}));const D2=R.days.length>120?R.days.slice(-120):R.days;
+    mkChart('cDay',{type:'bar',data:{labels:D2.map(g=>{const d=new Date(g.d);return p2(d.getDate())+'/'+p2(d.getMonth()+1);}),
+      datasets:[{label:'Tập điểm hoàn tất',data:D2.map(g=>g.done),backgroundColor:COL.ok,borderRadius:4,maxBarThickness:28},
+                {label:'Phiếu tạo mới',data:D2.map(g=>g.ks+g.bt),backgroundColor:rgba(COL.pri,.55),borderRadius:4,maxBarThickness:28}]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+        plugins:{legend:{position:'top',align:'end',labels:{boxWidth:12}},tooltip:{callbacks:{title:it=>'Ngày '+dmy(new Date(D2[it[0].dataIndex].d))}}},
+        scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0},grid:{color:COL.line}}},
+        onClick:(e,els)=>{if(!els.length)return;const g=D2[els[0].index];setDay('custom',ymd(g.d),ymd(g.d));toast('Đang xem ngày '+dmy(new Date(g.d))+'.');},
+        onHover:(e,els)=>{e.native.target.style.cursor=els.length?'pointer':'default';}}});}
+  /* bảng theo ngày + theo nhân sự */
+  const gw=el('div',{class:'dgrid'});
+  const t1=el('table'),H1=[['Ngày',1],['Hoàn tất'],['KS đạt'],['BT Đạt'],['BT K.đạt'],['Phiếu KS'],['Phiếu BT']];
+  t1.append(el('thead',null,el('tr',null,H1.map(([h,l])=>el('th',{class:l?'l':''},h)))));const b1=el('tbody');
+  R.days.slice().reverse().filter(g=>g.done||g.ks||g.bt||nd<=31).forEach(g=>{const dd=new Date(g.d),wd=['CN','T2','T3','T4','T5','T6','T7'][dd.getDay()];
+    const dl=el('button',{class:'lnk',type:'button',title:'Chỉ xem ngày này'},wd+' '+dmy(dd));dl.onclick=()=>setDay('custom',ymd(g.d),ymd(g.d));
+    b1.append(el('tr',{class:nd===1?'dsel':''},el('td',{class:'l'},dl),el('td',{class:'num'},dLink(g.done,mk('done',{day:{a:g.d,b:g.d+DAY},chips:[sc,'ngày '+dmy(dd)],title:'Hoàn tất ngày '+dmy(dd)+' ('+nf(g.done)+' tập điểm)'}),true)),
+      el('td',{class:'num'},nf(g.pass)),el('td',{class:'num'},nf(g.fixed)),el('td',{class:'num'},nf(g.btfail)),el('td',{class:'num'},nf(g.ks)),el('td',{class:'num'},nf(g.bt))));});
+  if(!b1.children.length)b1.append(el('tr',null,el('td',{colspan:7},el('div',{class:'state'},el('b',null,'Không có tập điểm hoàn tất hay phiếu tạo mới trong '+lab)))));
+  b1.append(el('tr',{class:'sumr'},el('td',{class:'l'},B('Tổng')),el('td',{class:'num'},B(nf(tot.done))),el('td',{class:'num'},B(nf(tot.pass))),el('td',{class:'num'},B(nf(tot.fixed))),el('td',{class:'num'},B(nf(tot.btfail))),el('td',{class:'num'},B(nf(tot.ks))),el('td',{class:'num'},B(nf(tot.bt)))));
+  t1.append(b1);t1.className='ldt';
+  const t2=el('table',{class:'ldt'});t2.append(el('thead',null,el('tr',null,[['Kỹ thuật viên',1],['Đội',1],['Hoàn tất'],['Phiếu tạo']].map(([h,l])=>el('th',{class:l?'l':''},h)))));const b2=el('tbody');
+  R.K.forEach(k=>b2.append(el('tr',null,el('td',{class:'l'},el('span',{class:'who'},ic('user'),short(k.ktv))),el('td',{class:'l'},k.leader||'—'),
+    el('td',{class:'num'},dLink(k.done,mk('done',{ktvF:k.ktv,chips:[short(k.ktv),lab],title:short(k.ktv)+' – hoàn tất '+lab+' ('+nf(k.done)+')'}),true)),
+    el('td',{class:'num'},dLink(k.tk,mk('cr',{ktvF:k.ktv,set:k.crSet,chips:[short(k.ktv),lab],title:short(k.ktv)+' – tập điểm có phiếu tạo '+lab+' ('+nf(k.crSet.size)+')'}))))));
+  if(!R.K.length)b2.append(el('tr',null,el('td',{colspan:4},el('div',{class:'state'},el('b',null,'Chưa có nhân sự nào làm trong '+lab)))));
+  t2.append(b2);
+  gw.append(el('div',null,el('h4',null,'Theo ngày'),el('div',{class:'tw'},t1)),el('div',null,el('h4',null,'Theo kỹ thuật viên · '+lab),el('div',{class:'tw'},t2)));
+  body.append(gw);}
 
 /* ---------- giao diện: sáng/tối · màu · phông ---------- */
 const ACC={blue:['#1D4ED8','#0E7490','Xanh dương'],violet:['#5B21B6','#9D174D','Tím'],green:['#047857','#3F6212','Xanh lá'],orange:['#B45309','#9A3412','Cam'],rose:['#9F1239','#9A3412','Hồng đỏ'],teal:['#0E7490','#1E40AF','Xanh ngọc']};
